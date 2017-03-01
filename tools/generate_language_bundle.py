@@ -55,6 +55,21 @@ if languageCode.startswith('en'):
     translation_marker = ''
 
 suffix = '_' + languageCode_underscore + '.properties';
+
+isDebug = False #(len(sys.argv) > 3) and (sys.argv[4] is '-debug')
+def debug(msg):
+    if isDebug:
+        print msg
+
+def replace_version(dst):
+    dst = re.sub('-5.\d.\d.\d-\d+', '', dst)
+    dst = re.sub('-5.\d.\d', '', dst)
+    dst = re.sub('-6.\d.\d.\d-\d+', '', dst)
+    dst = re.sub('-6.\d.\d', '', dst)
+    dst = re.sub('-\d.\d-', '-', dst) # remove version numbers
+    return dst
+
+
 def rreplace(s, old, new, occurrence=1):
     # like str.replace, but starts from the end
     # by default, only the last occurrence is replaced
@@ -62,6 +77,7 @@ def rreplace(s, old, new, occurrence=1):
     return new.join(li)
 
 def ensure_parent_folder_exists(dst):
+    debug('ensuring parent folder of ' + dst +  'exists')
     dst_parent = os.path.dirname(dst);
     if not os.path.exists(dst_parent):
         os.makedirs(dst_parent)
@@ -71,7 +87,7 @@ def copy(src, dst, patch=False, marker=translation_marker):
     ensure_parent_folder_exists(dst)
 
     # Copy files, optionally patching an existing file
-    print '\nCopying: ' +  os.path.realpath(os.path.join(origin_folder, src)) + '\nto ' + dst
+    debug('\nCopying: ' +  os.path.realpath(os.path.join(origin_folder, src)) + '\nto ' + dst)
     if patch:
         with codecs.open(src, 'r', 'utf-8') as fin:
             lines_src = fin.readlines()
@@ -80,7 +96,6 @@ def copy(src, dst, patch=False, marker=translation_marker):
     else:
         shutil.copy2(src, dst)
         convert_to_utf8(dst)
-
 
 def add_missing_properties(lines_src, dst_localised, encoding='utf_8', marker=translation_marker):
     if os.path.exists(dst_localised):
@@ -99,12 +114,12 @@ def add_missing_properties(lines_src, dst_localised, encoding='utf_8', marker=tr
                             break
 
                     if not found_line:
-                        print ' Adding missing key: ' + keyval[0].strip() + ' to file: ' + dst_localised
+                        debug(' Adding missing key: ' + keyval[0].strip() + ' to file: ' + dst_localised)
                         #fout.seek(0, 2)
                         fout.write(line.strip() + marker + '\n')
 
     else:
-        print 'Patching: ' +  os.path.realpath(dst_localised)
+        debug('Patching: ' +  os.path.realpath(dst_localised))
         ensure_parent_folder_exists(dst_localised)
         with codecs.open(dst_localised, 'w', 'utf-8') as fout:
             for line in lines_src:
@@ -232,9 +247,10 @@ for root, dirs, filenames in os.walk('.'):
             continue
 
         dst =  os.path.realpath(os.path.join(destination_folder, root, f ))
+        dst = replace_version(dst)
         # Prevent existing files at destination from being overwritten
         if os.path.exists(dst): #and not dst.endswith('.js'):
-            print "Skipped copying file", dst, "in the first round because it already exists"
+            debug("Skipped copying file " + dst + " in the first round because it already exists")
             continue
 
         if src.find('webapps/pentaho/js') > 0:
@@ -267,11 +283,9 @@ for root, dirs, filenames in os.walk('.'):
                     for el in z.namelist():
                         e = el.lower()
                         dst = os.path.realpath(os.path.join(destination_folder, root, f.replace('.jar', '_jar'), el.replace(languageCode_hyphen, languageCode_underscore) ))
-                        dst = re.sub('5.\d.\d.\d-\d+', '5.x', dst)
-                        dst = re.sub('5.\d.\d', '5.x', dst)
-                        dst = re.sub('-\d.\d-', '-', dst) # remove version numbers
+                        dst = replace_version(dst)
                         if e.endswith('messages_'+ suffix.lower()) or e.endswith('messages_'+ languageCode_hyphen.lower()  +'.properties'):
-                            print 'Copying/patching:\n  ' +  os.path.realpath(os.path.join(origin_folder, src, el)) + '\nto\n  ' + dst + '\n'
+                            debug('Copying/patching:\n  ' +  os.path.realpath(os.path.join(origin_folder, src, el)) + '\nto\n  ' + dst + '\n')
                             tmpfolder = os.tmpnam()
                             z.extract(el, tmpfolder)
                             tmpfile = os.path.join(tmpfolder, el)
@@ -305,7 +319,7 @@ for root, dirs, filenames in os.walk('.'):
 
         # Ignore all files belonging to this plugin
         if plugin_folder in os.path.realpath(os.path.join(origin_folder, src)):
-            print 'Skipping '+plugin_folder
+            debug('Skipping '+plugin_folder)
             continue
 
         # Ignore files that do not require further processing
@@ -323,7 +337,7 @@ for root, dirs, filenames in os.walk('.'):
         has_xul = g.endswith('.properties') and os.path.exists(src.replace('.properties', '.xul'))
         is_other = g.endswith('.properties') and os.path.exists(src.replace('.properties', '_supported_languages.properties'))
         if is_regular or has_xul or is_other:
-            print "round 2 elegible file:" + src
+            debug("round 2 elegible file:" + src)
             dst_localised =  os.path.realpath(os.path.join(destination_folder, root, f.replace('.properties', suffix) ))
             with codecs.open(src, 'r', 'utf_8') as fin:
                 lines_src = fin.readlines()
@@ -351,9 +365,8 @@ for root, dirs, filenames in os.walk('.'):
                         is_other = e.endswith('.properties') and e.replace('.properties', '_supported_languages.properties') in z_list
                         if is_regular or has_xul or is_other:
                             dst = os.path.realpath(os.path.join(destination_folder, root, f.replace('.jar', '_jar'), el.replace('.properties', suffix) ))
-                            dst = re.sub('5.\d.\d.\d-\d+', '5.x', dst)
-                            dst = re.sub('5.\d.\d', '5.x', dst)
-                            dst = re.sub('-\d.\d-', '-', dst)
+                            dst = replace_version(dst)
+                            #print "Creating jar file: " + dst
                             fin = z.open(el, 'r') # Zipfiles don't support "with" statement
                             lines_src = fin.readlines()
                             fin.close()
@@ -403,7 +416,7 @@ for root, dirs, filenames in os.walk(destination_folder):
             #os.system('recode XML..UTF8 {0}'.format(src))
 
 
-            print 'Unescaping \uXXXX into utf8 using native2ascii: ' + src
+            debug('Unescaping \uXXXX into utf8 using native2ascii: ' + src)
             #convert_to_utf8(src)
             os.system('/usr/bin/native2ascii -reverse {0} {0}'.format(src))
             #os.system('native2ascii -reverse -encoding utf-8 {0} {0}'.format(src)) # don't specify the encoding
@@ -420,7 +433,7 @@ for root, dirs, filenames in os.walk(destination_folder):
         for tmp in tmp_dirs:
             if g.endswith(tmp):
                 try:
-                    print "Removing folder: " + dst
+                    debug("Removing folder: " + dst)
                     shutil.rmtree( dst )
                 except e:
                     pass

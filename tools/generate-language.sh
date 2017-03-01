@@ -1,8 +1,7 @@
 #!/bin/bash
 
-ORIGIN=~/webdetails/servers/biserver-ee-520
-#ORIGIN=Applications/Pentaho520/server/biserver-ee/biserver-ee
-DEST=~/webdetails/plugins/languagePackInstaller/data
+ORIGIN=/Users/carlos/webdetails/servers/6GA/biserver-ee
+DEST=/Users/carlos/webdetails/projects/languagePackInstaller/data
 
 HERE=$(pwd)
 for locale in "$@"
